@@ -10,6 +10,7 @@
 # * (optional) Add selection_line creation regex (%emoji | %answer %answer %answer %answer %answer | %answer %answer | %nickname)
 # * (optional) Change handle commads from .startswith() to switch or other cleaner code
 # * !FIX help message
+# * add !plan clean answers - remove all answers from last plan
 # 
 # * run and debug [ongoing]
 #
@@ -22,18 +23,21 @@ import pickle
 import asyncio
 import traceback
 
-BOT_PREFIX = ("?", "!")
+BOT_PREFIX = ("!")
 TOKEN = 'NTQwMTAwNTEwNzA4MDA2OTEy.DzL_oQ.HDHIa-csyhM_b6AM4zMXfdGGsyU'
 client = discord.Client(command_prefix=BOT_PREFIX)
 
-defaultAnswers = ['🔢', '✅', '❌', '❔', '😒', '🎲', '↩'] # all, yes, no, idk, maybe, dice, cancel
+# defaultAnswers = ['🔢', '✅', '❌', '❔', '😒', '🎲', '↩'] # all, yes, no, idk, maybe, dice, cancel
+defaultAnswers = ['🔢', '✅', '❌', '❔', '😒', '↩'] # all, yes, no, idk, maybe, cancel
+# emptyAnswers = ['🔢', '↩'] # all, cancel - could be used as default answers
 emojiNr = ['1⃣' ,'2⃣' ,'3⃣' ,'4⃣' ,'5⃣' ,'6⃣' ,'7⃣' ,'8⃣' ,'9⃣', '🔢'] #{[1]-[9], [1234]}
 emojiAll = '🔢'
 emojiClear = ↩
 defaultEmoji = '👤'
 defaultPlanSize = 7
-planCasheSize = 3
+planCasheSize = 5
 pickleDataDelay = 5
+pinMessage = False
 plans = {} # { [channel.id] : Plan }
 globalUsers = [] # [ PlanUser, ... ]
 
@@ -170,11 +174,11 @@ class Plan():
 
     async def send_plan(self):
         print("send_plan")
-#       msg = 'Hello {0.author.mention}'.format(message)
         # resend plan
         msg = self.to_msg()
         self.message = await client.send_message(self.message.channel, msg)
-        await client.pin_message(self.message)
+        if pinMessage:
+            await client.pin_message(self.message)
         # recreate plan
         for e in emojiNr[0:self.size]:
             await client.add_reaction(self.message, e)
@@ -184,7 +188,8 @@ class Plan():
         pass
 
     async def resend_plan():
-        await client.unpin_message(self.message)
+        # if pinMessage:
+            # await client.unpin_message(self.message)
         await client.delete_message(self.message)
         await self.send_plan()
         pass
@@ -283,6 +288,7 @@ async def on_message(message):
     print("=========== START ==============")
     # print("on_message", message.content)
     print("on_message")
+    global pinMessage
     try_plan(message.channel)
 
     # handle commands
@@ -333,21 +339,52 @@ async def on_message(message):
     # !set emoji
             else:
                 await set_emoji(message, message.content)
+    # !set plan default size
+    # elif message.content.startswith("!set plan default size "):
+        # need to be possible to handle it per server/channel instead of globally
+        # message.content = message.content[23:]
+    # !pin
+    elif message.content.startswith("!pin "):
+        message.content = message.content[6:]
+        elif message.content.startswith("y") or message.content.startswith("yes"):
+            pinMessage = True
+        elif message.content.startswith("n") or message.content.startswith("no"):
+            pinMessage = False
+    # !help answers
+    elif message.content.startswith("!help answers"):
+        #defaultAnswers = ['🔢', '✅', '❌', '❔', '😒', '↩'] # all, yes, no, idk, maybe, dice, cancel
+        msg = 'Each plan comes with default answers:'
+        msg += '  ✅ - yes, "I agree".'
+        msg += '  ❌ - no, "I disagree".'
+        msg += '  ❔ - no answer right now, "I may know later."'
+        msg += '  😒 - yes, BUT "I dont fully agree".'
+        await client.send_message(message.channel, msg)
+    # !help usage
+    elif message.content.startswith("!help usage"):
+        msg = 'PlannerBot functionality:'
+        msg += ' * user is added to plan after selecting (adding reaction) option in bot message.'
+        msg += ' * select numbers from emojis (adding reaction), to pick them (from 1 to [plan size]). They will be displayed next to your nickname as selected.'
+        msg += ' * select '🔢' to select all numbers.'
+        msg += ' * select ↩ to clear all selected numbers'
+        msg += ' * select other (or new) emoji to set it as your answer'
+        await client.send_message(message.channel, msg)
     # !help
     elif message.content.startswith("!help"):
         # msg = "!plan [|new [\"msg\"|size [1-9] \"msg\"]|edit last|]\n!set [nick|emoji [|default]]\n!help"
         msg = "!help - this message"
         msg += "\n!help usage - explanation of bot interface"
+        msg += "\n!help aswers - explanation of meanning of default answers"
+        msg += "\n!pin message [y/yes/n/no]] - choose if plan should be pinned in channel (default [n/no])"
         msg += "\n!plan - resend last plan"
         msg += '\n!plan new [any test] - create plan with default size of {0} and text [any text]'.format(defaultPlanSize)
         msg += '\n!plan new size [size] [any test] - create plan with size of [size] (value from 1-9) and text [any text]'
         msg += '\n!plan edit [any text] - change text from last plan to new [any text]'
         # msg += '\n!plan edit last [any text] - change text from last plan to new [any text]'
-        # msg += '!\nplan at [number] - resend plan [number] from last. Limit {0}'.format(planCasheSize)
-        msg += "\n!set nick [any text] - set your nickname"
-        msg += "\n!set nick default [any text]]"
-        msg += "\n!set "
-        msg += "\n!set "
+        # msg += '!\nplan at [number] - resend plan [number] from last (starting with 1). Limit per channel {0}'.format(planCasheSize)
+        msg += "\n!set nick [any text] - set your nickname to [any text] in this server"
+        msg += "\n!set nick default [any text] - set your nickname to [any text] for all servers with this bot"
+        msg += "\n!set emoji [any text] - set your emoji to [any text] in this server"
+        msg += "\n!set emoji default [any text] - set your emoji to [any text] for all servers with this bot"
         await client.send_message(message.channel, msg)
     else:
         print("Unknown command:", message.content)
