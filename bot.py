@@ -1,0 +1,481 @@
+# Work with Python 3.6
+# Discord v. 0.16.12
+# Encoding UTF-8
+#
+# Usefull links:
+# https://www.devdungeon.com/content/make-discord-bot-python-part-2
+# https://discordpy.readthedocs.io/en/latest/api.html?highlight=react#user
+#
+# TODO:
+# * (optional) Add selection_line creation regex (%emoji | %answer %answer %answer %answer %answer | %answer %answer | %nickname)
+# * (optional) Change handle commads from .startswith() to switch or other cleaner code
+# * !FIX help message
+# 
+# * run and debug [ongoing]
+#
+# TO DEBUG:
+# * nick, emoji / default, normal - on different severs, channels
+#
+
+import discord
+import pickle
+import asyncio
+import traceback
+
+BOT_PREFIX = ("?", "!")
+TOKEN = 'NTQwMTAwNTEwNzA4MDA2OTEy.DzL_oQ.HDHIa-csyhM_b6AM4zMXfdGGsyU'
+client = discord.Client(command_prefix=BOT_PREFIX)
+
+defaultAnswers = ['🔢', '✅', '❌', '❔', '😒', '🎲', '↩'] # all, yes, no, idk, maybe, dice, cancel
+emojiNr = ['1⃣' ,'2⃣' ,'3⃣' ,'4⃣' ,'5⃣' ,'6⃣' ,'7⃣' ,'8⃣' ,'9⃣', '🔢'] #{[1]-[9], [1234]}
+emojiAll = '🔢'
+emojiClear = ↩
+defaultEmoji = '👤'
+defaultPlanSize = 7
+planCasheSize = 3
+pickleDataDelay = 5
+plans = {} # { [channel.id] : Plan }
+globalUsers = [] # [ PlanUser, ... ]
+
+class PlanUser():
+    def __init__(self, user, selection = [], answers = None, nickname = None, emoji = None, serverEmoji = {}, serverNickname = {}):
+        print("__init__user")
+        self.user = user
+        self.emoji = emoji
+        self.selection = selection
+        self.serverEmoji = serverEmoji
+        self.serverNickname = serverNickname,
+        self.nickname = nickname
+        if answers == None:
+            self.answers = emojiNr.copy()
+        else:
+            self.answers = answers
+
+    def __eq__(self, other):
+        """Overrides the default implementation"""
+        if isinstance(other, PlanUser):
+            return self.user.id == other.user.id
+        if isinstance(other, discord.User):
+            return self.user.id == other.id
+        return False
+
+    def copy(self):
+        return PlanUser(self.user, self.selection.copy(), self.answers.copy(), self.nickname, self.emoji, self.serverEmoji, self.serverNickname)
+
+class Plan():
+    def __init__(self, message, text, size):
+        print("__init__plan")
+        self.message = message
+        self.text = text
+        self.size = size
+        self.answers = defaultAnswers.copy()
+        self.users = []
+        pass
+
+    def __eq__(self, other):
+        """Overrides the default implementation"""
+        if isinstance(other, Plan) or isinstance(other, discord.Reaction):
+            return self.message.id == other.message.id
+        elif isinstance(other, discord.Message):
+            return self.message.id == other.id
+        return False
+
+    def to_msg(self):
+        print("to_msg")
+        # text
+        # [emoji][answers][nickname][selection]
+        #  orz    1 2 3 4  nickname  2 3 4
+        msg = self.text + " \n"
+        for user in self.users:
+            # use channel emoji if set
+            if self.message.server.id in user.serverEmoji:
+                msg += user.serverEmoji[self.message.server.id]
+            else:
+                msg += user.emoji
+            msg += " "*4
+            div = 0
+            # add answers
+            for answer in user.answers:
+                if div == 5:
+                    msg += "|"
+                div += 1
+                msg += emoji_snowflake(answer) + " "
+            # use channel nickname if set
+            if self.message.server.id in user.serverNickname:
+                msg += user.serverNickname[self.message.server.id] + " "
+            else:
+                msg += user.nickname + " "
+            # add selection
+            for selected in user.selection:
+                msg += emoji_snowflake(selected) + " "
+            msg += "\n"
+        return msg
+
+    async def handlereaction(self, reaction, user, flag = False):
+        print("handlereaction")
+        # print('Debug:', reaction, emoji_name(reaction.emoji)) #Debug
+        # Get user / Add to global
+        user = (await get_user(user)).copy()
+        if user not in self.users:
+            user.answers = emojiNr[0:self.size]
+            self.users.append(user)
+        userIdx = self.users.index(user)
+        user = self.users[userIdx]
+        # Handle reaction
+        emoji = emoji_name(reaction.emoji)
+        if emoji in emojiNr[0:self.size]: # Add selection
+            self._handle_selection(user, emoji, flag)
+        else:
+            if (emoji not in self.answers) and (reaction.emoji in self.answers): # Add answer
+                self.answers.append(reaction.emoji)
+            if not flag:
+                self._add_answer(user, reaction.emoji)
+        #update plan message
+        await self.refresh_plan()
+        await save_backup()
+        pass
+
+    def _add_answer(self, user, emoji):
+        print("_add_answer")
+        userId = self.users.index(user)
+        emojiName = emoji_name(emoji)
+        if emojiName == emojiAll: # Select all
+            self.users[userId].selection = emojiNr[0:self.size]
+            return
+        elif emojiName == emojiClear: # Clear selection
+            self.users[userId].selection = []
+            return
+        else: # Answer
+            for selected in self.users[userId].selection:
+                index = emojiNr.index(selected)
+                self.users[userId].answers[index] = emoji
+            self.users[userId].selection = []
+        pass
+
+    def _handle_selection(self, user, emoji, removed):
+        print("_handle_selection")
+        userId = self.users.index(user)
+        selection = self.users[userId].selection
+        if (not removed) and (emoji not in self.users[userId].selection):
+            selection.append(emoji)
+            selection = selection.sort()
+        elif removed and (emoji in self.users[userId].selection):
+            selection.remove(emoji)
+        pass
+
+    async def refresh_plan(self):
+        print("refresh_plan")
+        msg = self.to_msg()
+        await client.edit_message(self.message, msg)
+
+    async def send_plan(self):
+        print("send_plan")
+#       msg = 'Hello {0.author.mention}'.format(message)
+        # resend plan
+        msg = self.to_msg()
+        self.message = await client.send_message(self.message.channel, msg)
+        await client.pin_message(self.message)
+        # recreate plan
+        for e in emojiNr[0:self.size]:
+            await client.add_reaction(self.message, e)
+        for e in self.answers:
+            await client.add_reaction(self.message, e)
+        await save_backup()
+        pass
+
+    async def resend_plan():
+        await client.unpin_message(self.message)
+        await client.delete_message(self.message)
+        await self.send_plan()
+        pass
+
+    async def update_text(self, text):
+        print("update_text")
+        self.text = text
+        await self.refresh_plan()
+        pass
+
+
+# ===================== BACKUP ============================
+backupOngoing = False
+backupFileName = 'planner.backup'
+
+class Backup():
+    def __init__(self, users, plans):
+        self.users = users.copy()
+        self.plans = plans.copy()
+        pass
+
+async def save_backup():
+    print("save_backup")
+    global backupOngoing
+    global globalUsers
+    global plans
+    if not backupOngoing:
+        print("save_to_file_wait")
+        backupOngoing = True
+        # wait 5 sec before creating backup
+        # trying to prevent too many and unnecessary file operations
+        await asyncio.sleep(pickleDataDelay)
+        print("save_to_file_start")
+        bp = Backup(globalUsers, plans)
+        fileHandler = open(backupFileName, 'wb+')
+        pickle.dump(bp, fileHandler)
+        backupOngoing = False
+        print("save_to_file_end")
+    print("save_backup_end")
+    return
+
+async def load_backup():
+    print("load_backup")
+    global globalUsers
+    global plans
+    try:
+        fileHandler = open(backupFileName, 'rb+')
+    except:
+        #no file to load
+        await save_backup()
+        return
+    dump = pickle.load(fileHandler)
+    globalUsers = dump.users
+    plans = dump.plans
+    return
+
+# =========================================================
+# ===================== EVENTS ============================
+# =========================================================
+#DONE
+@client.event
+async def on_reaction_add(reaction, user):
+    #print("on_reaction_add")
+    await on_reaction(reaction, user)
+
+@client.event
+async def on_reaction_remove(reaction, user):
+    #print("on_reaction_remove")
+    await on_reaction(reaction, user, True)
+
+async def on_reaction(reaction, user, removed = False):
+    global plans
+    # we do not want the bot to reply to itself
+    if user == client.user:
+        return
+    try_plan(reaction.message.channel)
+    try:
+        planIdx = plans[reaction.message.channel.id].index(reaction)
+    except:
+        #print("Reaction not on followed message")
+        return;
+    print("on_reaction", removed)
+    await plans[reaction.message.channel.id][planIdx].handlereaction(reaction, user, removed)
+
+@client.event
+async def on_message(message):
+    #TODO move command to struct, add help function
+    # we do not want the bot to reply to itself
+    if message.author == client.user:
+        return
+
+    # return if not command
+    if not message.content[0] in BOT_PREFIX:
+        return
+
+    print("=========== START ==============")
+    # print("on_message", message.content)
+    print("on_message")
+    try_plan(message.channel)
+
+    # handle commands
+    if message.content.startswith("!plan"):
+        #remove len("!plan ")
+        message.content = message.content[6:]
+        if message.content.startswith("new"):
+            message.content = message.content[4:]
+    # !plan new size
+            if message.content.startswith("size "):
+                message.content = message.content[5:]
+                await plan_new_size(message, int(message.content[0:1]), message.content[2:])
+    # !plan new
+            else: # !plan new
+                await plan_new(message, message.content)     
+    # !plan edit last
+        # elif message.content.startswith("edit last "):
+            # message.content = message.content[10:]
+            # await plan_edit_last(message.channel, message.content)
+    # !plan edit (same as '!plan edit last')
+        elif message.content.startswith("edit "):
+            message.content = message.content[5:]
+            await plan_edit_last(message.channel, message.content)
+    # !plan at
+        #elif message.content.startswith("at "):
+            #message.content = message.content[3:]
+            #await resend_plan_at(message.channel, int(message.content[0:1]))
+        else:
+    # !plan
+            await resend_plan_at(message.channel)
+    elif message.content.startswith("!set"):
+        message.content = message.content[5:]
+        if message.content.startswith("nick "):
+            message.content = message.content[5:]
+    # !set nick default
+            if message.content.startswith("default "):
+                message.content = message.content[8:]
+                await set_nick(message, message.content, True)
+    # !set nick
+            else:
+                await set_nick(message, message.content)
+        elif message.content.startswith("emoji"):
+            message.content = message.content[6:]
+            if message.content.startswith("default "):
+    # !set emoji default
+                message.content = message.content[8:]
+                await set_emoji(message, message.content, True)
+    # !set emoji
+            else:
+                await set_emoji(message, message.content)
+    # !help
+    elif message.content.startswith("!help"):
+        # msg = "!plan [|new [\"msg\"|size [1-9] \"msg\"]|edit last|]\n!set [nick|emoji [|default]]\n!help"
+        msg = "!help - this message"
+        msg += "\n!help usage - explanation of bot interface"
+        msg += "\n!plan - resend last plan"
+        msg += '\n!plan new [any test] - create plan with default size of {0} and text [any text]'.format(defaultPlanSize)
+        msg += '\n!plan new size [size] [any test] - create plan with size of [size] (value from 1-9) and text [any text]'
+        msg += '\n!plan edit [any text] - change text from last plan to new [any text]'
+        # msg += '\n!plan edit last [any text] - change text from last plan to new [any text]'
+        # msg += '!\nplan at [number] - resend plan [number] from last. Limit {0}'.format(planCasheSize)
+        msg += "\n!set nick [any text] - set your nickname"
+        msg += "\n!set nick default [any text]]"
+        msg += "\n!set "
+        msg += "\n!set "
+        await client.send_message(message.channel, msg)
+    else:
+        print("Unknown command:", message.content)
+    print("=========== END ================")
+
+# =========================================================
+# ===================== COMMANDS ==========================
+# =========================================================
+def try_plan(channel):
+    try:
+        plans[channel.id]
+    except:
+        plans[channel.id] = []
+
+async def plan(channel, idx = -1):
+    print("plan")
+    global plans
+    if (idx < -1) or (idx >= len(plans)):
+        return
+    await plans[channel.id][idx].send_plan()
+
+async def plan_new(message, text):
+    print("plan_new")
+        #!plan_new size [size 1-9] [text...]
+    await plan_new_size(message, defaultPlanSize, text)
+
+async def plan_new_size(message, size, text):
+    print("plan_new_size")
+    global plans
+    #!plan new size [text...]
+    if len(plans[message.channel.id]) >= planCasheSize:
+        plans[message.channel.id].pop(0)
+    plans[message.channel.id].append(Plan(message, text, size))
+    await plan(message.channel)
+
+async def _plan_edit(channel, idx, text):
+    print("_plan_edit")
+    #!plan edit [text...]
+    await plans[channel.id][-idx].update_text(text)
+
+async def plan_edit_last(channel, text):
+    print("plan_edit_last")
+    #!plan edit [text...]
+    await _plan_edit(channel, 1, text)
+
+async def resend_plan_at(channel, idx = 1):
+    await plans[channel.id][-idx].resend_plan()
+
+async def get_user(user, serverId):
+    print("get_user")
+    global globalUsers
+    try:
+        userIdx = globalUsers.index(user)
+        user = globalUsers[userIdx]
+    except:
+        user = PlanUser(user)
+        user.serverNickname[serverId] = user.display_name
+        user.serverEmoji[serverId] = defaultEmoji
+        globalUsers.append(user) # Add global user
+    return user
+
+async def set_nick(message, text, default = False):
+    print("set_nick")
+    user = await get_user(message.author)
+    if(default):
+        user.nickname = text
+    else:
+        user.serverNickname[message.server.id] = text
+
+    for s in plans:
+        if(not default && message.server.id != s):
+            continue
+        for p in plans[s]:
+            try:
+                userId = p.users.index(user)
+                p.users[userId].nickname = text
+            except:
+                print("Exception in set_nick:\n", traceback.format_exc())
+
+async def set_emoji(message, emoji, default = False):
+    print("set_emoji")
+    user = await get_user(message.author)
+    if(default):
+        user.emoji = emoji
+    else:
+        user.serverEmoji[message.server.id] = emoji
+
+    for s in plans:
+        if(not default && message.server.id != s):
+            continue
+        for p in plans[s]:
+            try:
+                userId = p.users.index(user)
+                p.users[userId].emoji = emoji
+            except:
+                print("Exception in set_emoji:\n", traceback.format_exc())
+
+def emoji_name(emoji):
+    if isinstance(emoji, discord.Emoji):
+        return emoji.name
+    else:
+        return emoji
+
+def emoji_snowflake(emoji):
+    return str(emoji)
+
+async def reload_messages():
+    await plan[-1].resend_plan()
+
+# ========================= OTHERS =============================
+@client.event
+async def on_ready():
+    print('---------------------')
+    print('Logged in as')
+    print(client.user.name)
+    print(client.user.id)
+    print('---------------------')
+    print('Load backup -- START')
+    await load_backup()
+    print('Load backup -- FINISHED')
+    # need to resend, but it would be stupid to resend on all channels conected with bot
+    # need to be done manually with !plan
+    #print('Reload plan messages -- START')
+    #await reload_messages()
+    #print('Reload plan messages -- FINISHED')
+    print('---------------------')
+    print('------- READY -------')
+    print('---------------------')
+
+client.run(TOKEN)
+
