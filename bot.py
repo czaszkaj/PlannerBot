@@ -2,6 +2,9 @@
 # Discord v. 0.16.12
 # Encoding UTF-8
 #
+# Invite
+# https://discordapp.com/api/oauth2/authorize?client_id=540100510708006912&permissions=490688&scope=bot
+#
 # Usefull links:
 # https://www.devdungeon.com/content/make-discord-bot-python-part-2
 # https://discordpy.readthedocs.io/en/latest/api.html?highlight=react#user
@@ -23,6 +26,7 @@ import pickle
 import asyncio
 import traceback
 
+# GLOBAL VARIABLES
 BOT_PREFIX = ("!")
 TOKEN = 'NTQwMTAwNTEwNzA4MDA2OTEy.DzL_oQ.HDHIa-csyhM_b6AM4zMXfdGGsyU'
 client = discord.Client(command_prefix=BOT_PREFIX)
@@ -40,6 +44,8 @@ pickleDataDelay = 5
 pinMessage = False
 plans = {} # { [channel.id] : Plan }
 globalUsers = [] # [ PlanUser, ... ]
+
+# PLAN CLASSES
 
 class PlanUser():
     def __init__(self, user, selection = [], answers = None, nickname = None, emoji = None, serverEmoji = {}, serverNickname = {}):
@@ -86,9 +92,9 @@ class Plan():
 
     def to_msg(self):
         print("to_msg")
-        # text
-        # [emoji][answers][nickname][selection]
-        #  orz    1 2 3 4  nickname  2 3 4
+        # [any text]
+        # [emoji][answers]        [nickname] [selection]
+        #  \[T]/  1 2 3 4 5 | 6 7  user.nick  2 3 4
         msg = self.text + " \n"
         for user in self.users:
             # use channel emoji if set
@@ -253,7 +259,7 @@ async def load_backup():
 @client.event
 async def on_reaction_add(reaction, user):
     #print("on_reaction_add")
-    await on_reaction(reaction, user)
+    await on_reaction(reaction, user, False)
 
 @client.event
 async def on_reaction_remove(reaction, user):
@@ -491,8 +497,8 @@ def emoji_name(emoji):
 def emoji_snowflake(emoji):
     return str(emoji)
 
-async def reload_messages():
-    await plan[-1].resend_plan()
+# async def reload_messages():
+    # await plan[-1].resend_plan()
 
 # ========================= OTHERS =============================
 @client.event
@@ -505,8 +511,11 @@ async def on_ready():
     print('Load backup -- START')
     await load_backup()
     print('Load backup -- FINISHED')
-    # need to resend, but it would be stupid to resend on all channels conected with bot
-    # need to be done manually with !plan
+    # in discord v. 1.0 there could be used on_raw_reaction.
+    #   Without it, we can't catch events before bot start/restart
+    # Need to resend messages to catch events for them
+    #   But it would be stupid to resend on all channels conected with bot
+    # Better to do it manually with !plan
     #print('Reload plan messages -- START')
     #await reload_messages()
     #print('Reload plan messages -- FINISHED')
