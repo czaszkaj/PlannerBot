@@ -48,7 +48,7 @@ globalUsers = [] # [ PlanUser, ... ]
 # PLAN CLASSES
 
 class PlanUser():
-    def __init__(self, user, selection = [], answers = None, nickname = None, emoji = None, serverEmoji = {}, serverNickname = {}):
+    def __init__(self, user, selection = [], answers = None, emoji = None, serverEmoji = {}, serverNickname = {}):
         print("__init__user")
         self.user = user
         if emoji == None:
@@ -58,10 +58,6 @@ class PlanUser():
         self.selection = selection
         self.serverEmoji = serverEmoji
         self.serverNickname = serverNickname
-        if nickname == None:
-            self.nickname = user.display_name
-        else:
-            self.nickname = nickname
         if answers == None:
             self.answers = emojiNr.copy()
         else:
@@ -76,7 +72,7 @@ class PlanUser():
         return False
 
     def copy(self):
-        return PlanUser(self.user, self.selection.copy(), self.answers.copy(), self.nickname, self.emoji, self.serverEmoji, self.serverNickname)
+        return PlanUser(self.user, self.selection.copy(), self.answers.copy(), self.emoji, self.serverEmoji, self.serverNickname)
 
 class Plan():
     def __init__(self, message, text, size):
@@ -103,8 +99,8 @@ class Plan():
         #  \[T]/  1 2 3 4 5 | 6 7  user.nick  2 3 4
         msg = self.text + " \n"
         for user in self.users:
+            print(self.message.server.id, user.serverNickname, user.user.display_name)
             # use channel emoji if set
-            print(self.message.server.id, user.serverEmoji, user.emoji, user.nickname)
             if self.message.server.id in user.serverEmoji:
                 msg += user.serverEmoji[self.message.server.id]
             else:
@@ -121,7 +117,7 @@ class Plan():
             if self.message.server.id in user.serverNickname:
                 msg += user.serverNickname[self.message.server.id] + " "
             else:
-                msg += user.nickname + " "
+                msg += user.user.display_name + " "
             # add selection
             for selected in user.selection:
                 msg += emoji_snowflake(selected) + " "
@@ -336,12 +332,7 @@ async def on_message(message):
         message.content = message.content[5:]
         if message.content.startswith("nick "):
             message.content = message.content[5:]
-    # !set nick default
-    #        if message.content.startswith("default "):
-    #            message.content = message.content[8:]
-    #            await set_nick(message, message.content, True)
     # !set nick
-    #        else:
             await set_nick(message, message.content)
         elif message.content.startswith("emoji "):
             message.content = message.content[6:]
@@ -447,13 +438,13 @@ async def resend_plan_at(channel, idx = 1):
     await plans[channel.id][-idx].resend_plan()
 
 async def get_user(user, serverId):
-    print("get_user")
+    print("get_user", user.display_name)
     global globalUsers
     try:
         userIdx = globalUsers.index(user)
+        if serverId not in globalUsers[userIdx].serverNickname:
+            globalUsers[userIdx].serverNickname[serverId] = user.display_name
         user = globalUsers[userIdx]
-        if serverId not in user.serverNickname:
-            user.serverNickname[serverId] = user.user.display_name
     except:
         user = PlanUser(user)
         user.serverNickname[serverId] = user.user.display_name
@@ -461,17 +452,13 @@ async def get_user(user, serverId):
         globalUsers.append(user) # Add global user
     return user
 
-async def set_nick(message, text, default = False):
+async def set_nick(message, text):
     print("set_nick")
     user = await get_user(message.author, message.server.id)
-    print(default, user.serverNickname, message.server.id)
-    if(default):
-        user.nickname = text
-    else:
-        user.serverNickname[message.server.id] = text
+    user.serverNickname[message.server.id] = text
 
     for s in plans:
-        if((not default) and (message.server.id != s)):
+        if(message.server.id != s):
             continue
         for p in plans[s]:
             try:
