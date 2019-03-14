@@ -51,11 +51,17 @@ class PlanUser():
     def __init__(self, user, selection = [], answers = None, nickname = None, emoji = None, serverEmoji = {}, serverNickname = {}):
         print("__init__user")
         self.user = user
-        self.emoji = emoji
+        if emoji == None:
+            self.emoji = defaultEmoji
+        else:
+            self.emoji = emoji
         self.selection = selection
         self.serverEmoji = serverEmoji
-        self.serverNickname = serverNickname,
-        self.nickname = nickname
+        self.serverNickname = serverNickname
+        if nickname == None:
+            self.nickname = user.display_name
+        else:
+            self.nickname = nickname
         if answers == None:
             self.answers = emojiNr.copy()
         else:
@@ -98,6 +104,7 @@ class Plan():
         msg = self.text + " \n"
         for user in self.users:
             # use channel emoji if set
+            print(self.message.server.id, user.serverEmoji, user.emoji, user.nickname)
             if self.message.server.id in user.serverEmoji:
                 msg += user.serverEmoji[self.message.server.id]
             else:
@@ -125,7 +132,7 @@ class Plan():
         print("handlereaction")
         # print('Debug:', reaction, emoji_name(reaction.emoji)) #Debug
         # Get user / Add to global
-        user = (await get_user(user)).copy()
+        user = (await get_user(user, reaction.message.server.id)).copy()
         if user not in self.users:
             user.answers = emojiNr[0:self.size]
             self.users.append(user)
@@ -193,7 +200,7 @@ class Plan():
         await save_backup()
         pass
 
-    async def resend_plan():
+    async def resend_plan(self):
         # if pinMessage:
             # await client.unpin_message(self.message)
         await client.delete_message(self.message)
@@ -309,7 +316,7 @@ async def on_message(message):
                 await plan_new_size(message, int(message.content[0:1]), message.content[2:])
     # !plan new
             else: # !plan new
-                await plan_new(message, message.content)     
+                await plan_new(message, message.content)
     # !plan edit last
         # elif message.content.startswith("edit last "):
             # message.content = message.content[10:]
@@ -325,18 +332,18 @@ async def on_message(message):
         else:
     # !plan
             await resend_plan_at(message.channel)
-    elif message.content.startswith("!set"):
+    elif message.content.startswith("!set "):
         message.content = message.content[5:]
         if message.content.startswith("nick "):
             message.content = message.content[5:]
     # !set nick default
-            if message.content.startswith("default "):
-                message.content = message.content[8:]
-                await set_nick(message, message.content, True)
+    #        if message.content.startswith("default "):
+    #            message.content = message.content[8:]
+    #            await set_nick(message, message.content, True)
     # !set nick
-            else:
-                await set_nick(message, message.content)
-        elif message.content.startswith("emoji"):
+    #        else:
+            await set_nick(message, message.content)
+        elif message.content.startswith("emoji "):
             message.content = message.content[6:]
             if message.content.startswith("default "):
     # !set emoji default
@@ -352,7 +359,7 @@ async def on_message(message):
     # !pin
     elif message.content.startswith("!pin "):
         message.content = message.content[6:]
-        elif message.content.startswith("y") or message.content.startswith("yes"):
+        if message.content.startswith("y") or message.content.startswith("yes"):
             pinMessage = True
         elif message.content.startswith("n") or message.content.startswith("no"):
             pinMessage = False
@@ -370,7 +377,7 @@ async def on_message(message):
         msg = 'PlannerBot functionality:'
         msg += ' * user is added to plan after selecting (adding reaction) option in bot message.'
         msg += ' * select numbers from emojis (adding reaction), to pick them (from 1 to [plan size]). They will be displayed next to your nickname as selected.'
-        msg += ' * select '🔢' to select all numbers.'
+        msg += ' * select \'🔢\' to select all numbers.'
         msg += ' * select ↩ to clear all selected numbers'
         msg += ' * select other (or new) emoji to set it as your answer'
         await client.send_message(message.channel, msg)
@@ -388,7 +395,7 @@ async def on_message(message):
         # msg += '\n!plan edit last [any text] - change text from last plan to new [any text]'
         # msg += '!\nplan at [number] - resend plan [number] from last (starting with 1). Limit per channel {0}'.format(planCasheSize)
         msg += "\n!set nick [any text] - set your nickname to [any text] in this server"
-        msg += "\n!set nick default [any text] - set your nickname to [any text] for all servers with this bot"
+        #msg += "\n!set nick default [any text] - set your nickname to [any text] for all servers with this bot"
         msg += "\n!set emoji [any text] - set your emoji to [any text] in this server"
         msg += "\n!set emoji default [any text] - set your emoji to [any text] for all servers with this bot"
         await client.send_message(message.channel, msg)
@@ -445,23 +452,26 @@ async def get_user(user, serverId):
     try:
         userIdx = globalUsers.index(user)
         user = globalUsers[userIdx]
+        if serverId not in user.serverNickname:
+            user.serverNickname[serverId] = user.user.display_name
     except:
         user = PlanUser(user)
-        user.serverNickname[serverId] = user.display_name
-        user.serverEmoji[serverId] = defaultEmoji
+        user.serverNickname[serverId] = user.user.display_name
+        #user.emoji = defaultEmoji
         globalUsers.append(user) # Add global user
     return user
 
 async def set_nick(message, text, default = False):
     print("set_nick")
-    user = await get_user(message.author)
+    user = await get_user(message.author, message.server.id)
+    print(default, user.serverNickname, message.server.id)
     if(default):
         user.nickname = text
     else:
         user.serverNickname[message.server.id] = text
 
     for s in plans:
-        if(not default && message.server.id != s):
+        if((not default) and (message.server.id != s)):
             continue
         for p in plans[s]:
             try:
@@ -472,14 +482,15 @@ async def set_nick(message, text, default = False):
 
 async def set_emoji(message, emoji, default = False):
     print("set_emoji")
-    user = await get_user(message.author)
+    user = await get_user(message.author, message.server.id)
+    print(default, user.serverEmoji, message.server.id)
     if(default):
         user.emoji = emoji
     else:
         user.serverEmoji[message.server.id] = emoji
 
     for s in plans:
-        if(not default && message.server.id != s):
+        if((not default) and (message.server.id != s)):
             continue
         for p in plans[s]:
             try:
