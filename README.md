@@ -1,4 +1,4 @@
 # PlannerBot
 Discord bot for planning
 
-Simple bot to use in discor for easy planning without spam messages
+Simple bot to use in discord for easy planning
