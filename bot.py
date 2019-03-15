@@ -347,13 +347,13 @@ async def on_message(message):
     # elif message.content.startswith("!set plan default size "):
         # need to be possible to handle it per server/channel instead of globally
         # message.content = message.content[23:]
-    # !pin
-    elif message.content.startswith("!pin "):
-        message.content = message.content[6:]
-        if message.content.startswith("y") or message.content.startswith("yes"):
-            pinMessage = True
-        elif message.content.startswith("n") or message.content.startswith("no"):
-            pinMessage = False
+    # !pin (need to be done per server))
+    #elif message.content.startswith("!pin "):
+    #    message.content = message.content[6:]
+    #    if message.content.startswith("y") or message.content.startswith("yes"):
+    #        pinMessage = True
+    #    elif message.content.startswith("n") or message.content.startswith("no"):
+    #        pinMessage = False
     # !help answers
     elif message.content.startswith("!help answers"):
         #defaultAnswers = ['🔢', '✅', '❌', '❔', '😒', '↩'] # all, yes, no, idk, maybe, dice, cancel
@@ -375,10 +375,11 @@ async def on_message(message):
     # !help
     elif message.content.startswith("!help"):
         # msg = "!plan [|new [\"msg\"|size [1-9] \"msg\"]|edit last|]\n!set [nick|emoji [|default]]\n!help"
-        msg = "!help - this message"
+        msg = "Available commands:"
+        msg += "!help - this message"
         msg += "\n!help usage - explanation of bot interface"
         msg += "\n!help aswers - explanation of meanning of default answers"
-        msg += "\n!pin message [y/yes/n/no]] - choose if plan should be pinned in channel (default [n/no])"
+        # msg += "\n!pin message [y/yes/n/no]] - choose if plan should be pinned in channel (default [n/no])"
         msg += "\n!plan - resend last plan"
         msg += '\n!plan new [any test] - create plan with default size of {0} and text [any text]'.format(defaultPlanSize)
         msg += '\n!plan new size [size] [any test] - create plan with size of [size] (value from 1-9) and text [any text]'
