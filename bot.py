@@ -28,7 +28,8 @@ import traceback
 
 # GLOBAL VARIABLES
 BOT_PREFIX = ("!")
-TOKEN = 'NTQwMTAwNTEwNzA4MDA2OTEy.DzL_oQ.HDHIa-csyhM_b6AM4zMXfdGGsyU'
+#TOKEN = 'NTQwMTAwNTEwNzA4MDA2OTEy.DzL_oQ.HDHIa-csyhM_b6AM4zMXfdGGsyU' # PlannerBot
+TOKEN = 'NDk3Mzk0MzE4NDU4MzU1NzEy.DpekHw.sQo6gi9jmzGz2LQKGASJVrX-kG0' # WarHamBot
 client = discord.Client(command_prefix=BOT_PREFIX)
 
 # defaultAnswers = ['🔢', '✅', '❌', '❔', '😒', '🎲', '↩'] # all, yes, no, idk, maybe, dice, cancel
@@ -443,12 +444,16 @@ async def get_user(user, serverId):
     global globalUsers
     try:
         userIdx = globalUsers.index(user)
-        if serverId not in globalUsers[userIdx].serverNickname:
-            globalUsers[userIdx].serverNickname[serverId] = user.display_name
+        print("user exist")
+        #if serverId not in globalUsers[userIdx].serverNickname:
+        #    globalUsers[userIdx].serverNickname[serverId] = user.display_name
         user = globalUsers[userIdx]
     except:
+        print("new user")
+        print(user.id)
         user = PlanUser(user)
-        user.serverNickname[serverId] = user.user.display_name
+        print(user.user.id)
+        #user.serverNickname[serverId] = user.user.display_name
         #user.emoji = defaultEmoji
         globalUsers.append(user) # Add global user
     return user
