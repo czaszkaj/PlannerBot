@@ -28,8 +28,8 @@ import traceback
 
 # GLOBAL VARIABLES
 BOT_PREFIX = ("!")
-#TOKEN = 'NTQwMTAwNTEwNzA4MDA2OTEy.DzL_oQ.HDHIa-csyhM_b6AM4zMXfdGGsyU' # PlannerBot
-TOKEN = 'NDk3Mzk0MzE4NDU4MzU1NzEy.DpekHw.sQo6gi9jmzGz2LQKGASJVrX-kG0' # WarHamBot
+TOKEN = 'NTQwMTAwNTEwNzA4MDA2OTEy.DzL_oQ.HDHIa-csyhM_b6AM4zMXfdGGsyU' # PlannerBot
+#TOKEN = 'NDk3Mzk0MzE4NDU4MzU1NzEy.DpekHw.sQo6gi9jmzGz2LQKGASJVrX-kG0' # WarHamBot
 client = discord.Client(command_prefix=BOT_PREFIX)
 
 # defaultAnswers = ['🔢', '✅', '❌', '❔', '😒', '🎲', '↩'] # all, yes, no, idk, maybe, dice, cancel
@@ -50,7 +50,7 @@ globalUsers = [] # [ PlanUser, ... ]
 
 class PlanUser():
     def __init__(self, user, selection = [], answers = None, emoji = None, serverEmoji = {}, serverNickname = {}):
-        print("__init__user")
+        print("__init__user", user.id, serverEmoji, serverNickname, selection)
         self.user = user
         if emoji == None:
             self.emoji = defaultEmoji
@@ -73,6 +73,7 @@ class PlanUser():
         return False
 
     def copy(self):
+        print("copy()", self.user.id)
         return PlanUser(self.user, self.selection.copy(), self.answers.copy(), self.emoji, self.serverEmoji, self.serverNickname)
 
 class Plan():
@@ -100,7 +101,7 @@ class Plan():
         #  \[T]/  1 2 3 4 5 | 6 7  user.nick  2 3 4
         msg = self.text + " \n"
         for user in self.users:
-            print(self.message.server.id, user.serverNickname, user.user.display_name)
+            print("server:", self.message.server.id, "nick:", user.serverNickname, "name:", user.user.display_name, "id:", user.user.id, "emoji:", user.serverEmoji)
             # use channel emoji if set
             if self.message.server.id in user.serverEmoji:
                 msg += user.serverEmoji[self.message.server.id]
@@ -129,12 +130,19 @@ class Plan():
         print("handlereaction")
         # print('Debug:', reaction, emoji_name(reaction.emoji)) #Debug
         # Get user / Add to global
+        #for user1 in self.users: print(user1.user.id, user1.serverNickname, user1.serverEmoji)
         user = (await get_user(user, reaction.message.server.id)).copy()
+        #print(user.user.id, user.serverNickname, user.serverEmoji)
         if user not in self.users:
             user.answers = emojiNr[0:self.size]
             self.users.append(user)
+        #print(2)
+        #for user2 in self.users: print(user2.user.id, user2.serverNickname, user2.serverEmoji)
+        #print(3)
         userIdx = self.users.index(user)
+        #print(4, userIdx)
         user = self.users[userIdx]
+        #print(5, user.user.id)
         # Handle reaction
         emoji = emoji_name(reaction.emoji)
         if emoji in emojiNr[0:self.size]: # Add selection
@@ -281,6 +289,7 @@ async def on_reaction(reaction, user, removed = False):
     except:
         #print("Reaction not on followed message")
         return;
+    print("- - - - - - - - - - - - - - - -")
     print("on_reaction", removed)
     await plans[reaction.message.channel.id][planIdx].handlereaction(reaction, user, removed)
 
@@ -440,22 +449,22 @@ async def resend_plan_at(channel, idx = 1):
     await plans[channel.id][-idx].resend_plan()
 
 async def get_user(user, serverId):
-    print("get_user", user.display_name)
+    print("get_user", user.display_name, user.id)
     global globalUsers
     try:
         userIdx = globalUsers.index(user)
-        print("user exist")
+        print("user exist", userIdx)
         #if serverId not in globalUsers[userIdx].serverNickname:
         #    globalUsers[userIdx].serverNickname[serverId] = user.display_name
         user = globalUsers[userIdx]
     except:
         print("new user")
-        print(user.id)
-        user = PlanUser(user)
-        print(user.user.id)
+        user = PlanUser(user, [], None, None, {}, {})
         #user.serverNickname[serverId] = user.user.display_name
         #user.emoji = defaultEmoji
+        #for user1 in globalUsers: print(user1.user.id, user1.serverNickname, user1.serverEmoji)
         globalUsers.append(user) # Add global user
+        #for user2 in globalUsers: print(user2.user.id, user2.serverNickname, user2.serverEmoji)
     return user
 
 async def set_nick(message, text):
