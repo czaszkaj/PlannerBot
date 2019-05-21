@@ -28,8 +28,8 @@ import traceback
 
 # GLOBAL VARIABLES
 BOT_PREFIX = ("!")
-TOKEN = 'NTQwMTAwNTEwNzA4MDA2OTEy.DzL_oQ.HDHIa-csyhM_b6AM4zMXfdGGsyU' # PlannerBot
-#TOKEN = 'NDk3Mzk0MzE4NDU4MzU1NzEy.DpekHw.sQo6gi9jmzGz2LQKGASJVrX-kG0' # WarHamBot
+#TOKEN = 'NTQwMTAwNTEwNzA4MDA2OTEy.DzL_oQ.HDHIa-csyhM_b6AM4zMXfdGGsyU' # PlannerBot
+TOKEN = 'NDk3Mzk0MzE4NDU4MzU1NzEy.DpekHw.sQo6gi9jmzGz2LQKGASJVrX-kG0' # WarHamBot
 client = discord.Client(command_prefix=BOT_PREFIX)
 
 # defaultAnswers = ['🔢', '✅', '❌', '❔', '😒', '🎲', '↩'] # all, yes, no, idk, maybe, dice, cancel
