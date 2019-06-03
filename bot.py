@@ -28,8 +28,7 @@ import traceback
 
 # GLOBAL VARIABLES
 BOT_PREFIX = ("!")
-# Didn't expect for that server can be accesed with just token
-# Didn't really cared for bot to be broken
+TOKEN = 'NDk3Mzk0MzE4NDU4MzU1NzEy.XPUD1Q.ybYqOAyghkKn0JIPRbl5Bkq4wgE';
 client = discord.Client(command_prefix=BOT_PREFIX)
 
 # defaultAnswers = ['🔢', '✅', '❌', '❔', '😒', '🎲', '↩'] # all, yes, no, idk, maybe, dice, cancel
